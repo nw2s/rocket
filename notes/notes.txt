@@ -1,0 +1,62 @@
+
+
+
+
+Control Display
+
+
+Control RF
+
+Address = 0x1A
+
+
+Transmit Addressed, Reliable
+block type = PING
+
+Transmit Addressed, Reliable
+block type = ARM_READY
+
+Transmit Addressed, Reliable
+block type = LAUNCH
+
+
+
+Launch
+
+Address = 0x1B
+
+Transmit Addressed, Reliable
+block type = LAUNCH_STATUS
+status = READY/SAFE
+
+
+
+Rocket
+
+Address = 0x1C
+
+Transmit Addressed, Unreliable
+block type = TELEMETRIC
+5x per second
+int accelX
+int accelY
+int accelZ
+float altitude
+float latitudeDegrees
+float longitudeDegrees
+float altitudeGPS
+uint8_t quality
+uint8_t satellites
+uint8_t hour
+uint8_t minute 
+uint8_t seconds
+uint16_t milliseconds
+
+
+
+
+431.215Mhz
+
+
+
+
