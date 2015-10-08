@@ -8,9 +8,10 @@
 #include "LIS331.h"
 #include "Adafruit_GPS.h"
 #include <SoftwareSerial.h>
+#include "SPIFlash.h"
 
-
-#define DEBUG true
+#define DEBUG false
+#define FLASH_SS 23
 
 /* Singleton instances */
 RH_RF69 rf69(4, 2); 
@@ -18,6 +19,7 @@ MPL3115A2 altimeter;
 LIS331 lis;
 Adafruit_GPS GPS(&Serial1);
 HardwareSerial mySerial = Serial1;
+SPIFlash flash(FLASH_SS, 0xEF30);
 
 uint32_t timer = 0;
 
@@ -30,16 +32,16 @@ void debug()
 	Serial.print("Altitude:      ");
 	Serial.println(telemetry.altitude);
 
-	Serial.print("Longitude:     ");
-	Serial.println(telemetry.longitudeDegrees);
 	Serial.print("Latitude:      ");
-	Serial.println(telemetry.latitudeDegrees);
+	Serial.println(telemetry.latitudeDegrees, 11);
+	Serial.print("Longitude:     ");
+	Serial.println(telemetry.longitudeDegrees, 11);
 	Serial.print("Altitude GPS:  ");
 	Serial.println(telemetry.altitudeGPS);
 	Serial.print("Fix:           ");
 	Serial.println(telemetry.fix);
 	Serial.print("Fix Quality:   ");
-	Serial.println(telemetry.altitudeGPS);
+	Serial.println(telemetry.fixQuality);
 	Serial.print("Satellites:   ");
 	Serial.println(telemetry.satellites);
 	Serial.print("Time:         ");
@@ -109,11 +111,17 @@ void setup()
 	/* Set up the LED to be blinky when we send data */
     pinMode(15, OUTPUT);
 	
+	/* GPS Stuff */
     GPS.begin(4800);
     GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
     GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);  
     GPS.sendCommand(PGCMD_ANTENNA);
 	
+	/* SPI Flsh */
+    if (!flash.initialize())
+	{
+		while(1);
+	}
 	
 	/* Initialize the telemetry data */
 	telemetry.dataType = DATA_TYPE_TELEMETRY;
@@ -128,6 +136,9 @@ void setup()
 	telemetry.fix = false;
 	telemetry.fixQuality = 0;
 	telemetry.satellites = 0;
+	telemetry.year = 0;
+	telemetry.month = 0;
+	telemetry.day = 0;
 	telemetry.hour = 0;
 	telemetry.minute = 0;
 	telemetry.seconds = 0;
@@ -173,16 +184,20 @@ void loop()
 		telemetry.fix = GPS.fix;
 		telemetry.fixQuality = GPS.fixquality;
 		telemetry.satellites = GPS.satellites;
+		telemetry.year = GPS.year;
+		telemetry.month = GPS.month;
+		telemetry.day = GPS.day;
 		telemetry.hour = GPS.hour;
 		telemetry.minute = GPS.minute;
 		telemetry.seconds = GPS.seconds;
 		telemetry.milliseconds = GPS.milliseconds;
 
+		//TODO: no milliseconds?
+		//TODO: accellerometer looks off
+
 		/* Cast the telemetry  data to an array of bytes and send it */
 		rf69.send((uint8_t *)&telemetry, sizeof(telemetry));
-    
-		/* TODO: Store the data in the flash */
-	
+    	
 	    digitalWrite(15,HIGH);
 	    delay(10);
 	    digitalWrite(15,LOW);

@@ -14,7 +14,9 @@ Transmit Addressed, Reliable
 block type = PING
 
 Transmit Addressed, Reliable
-block type = ARM_READY
+block type = ARM_STATUS
+status = SAFE, READY, ARMED
+
 
 Transmit Addressed, Reliable
 block type = LAUNCH
@@ -28,7 +30,10 @@ Address = 0x1B
 Transmit Addressed, Reliable
 block type = LAUNCH_STATUS
 status = READY/SAFE
+1x per second
 
+Connect relay to pin 22
+Connect SPDT switch to pin 23
 
 
 Rocket
@@ -53,10 +58,55 @@ uint8_t seconds
 uint16_t milliseconds
 
 
+I2C SDA = 17
+I2C SCL = 16
+Accellerometer LIS331 = I2C
+Altimeter MPL3115A2 = I2C
+
+Serial RX = 8
+Serial TX = 9
+On-Off = 22
+GPS receiver
+
+
+Logic:
+
+Setup:
+
+	Initialize radio
+	Initialize logging
+	Initialize GPS
+	Initialize Accellerometer
+	Initialize Pressure
+
+Loop:
+	
+	Is packet available?
+
+		Launch Status?
+			
+			Record launch state
+		
+	
+	
+	Once per 200ms:
+	
+
+
+
+Logging: use address 0 to specify where we are in the recording
+
+
+
+
 
 
 431.215Mhz
 
 
+
+
+45.6mm
+5.08mm
 
 
