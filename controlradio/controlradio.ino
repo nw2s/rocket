@@ -52,10 +52,52 @@ void debug()
     Serial.println("\n\n\n--------------------------------");
 }
 
+void sendToDisplay()
+{
+	Serial1.print(INDICATOR_TEMPERATURE);
+	Serial1.println(telemetry->temperature);
+	Serial1.print(INDICATOR_ALTITUDE);
+	Serial1.println(telemetry->altitude);
+
+	Serial1.print(INDICATOR_LATITUDE);
+	Serial1.println(telemetry->latitudeDegrees, 11);
+	Serial1.print(INDICATOR_LONGITUDE);
+	Serial1.println(telemetry->longitudeDegrees, 11);
+	Serial1.print(INDICATOR_ALTITUDEGPS);
+	Serial1.println(telemetry->altitudeGPS);
+	Serial1.print(INDICATOR_FIX);
+	Serial1.println(telemetry->fix);
+	Serial1.print(INDICATOR_QUALITY);
+	Serial1.println(telemetry->fixQuality);
+	Serial1.print(INDICATOR_SATELLITES);
+	Serial1.println(telemetry->satellites);
+	Serial1.print(INDICATOR_TIME);
+	Serial1.print(telemetry->hour);
+	Serial1.print(":");
+	Serial1.print(telemetry->minute);
+	Serial1.print(":");
+	Serial1.print(telemetry->seconds);
+	Serial1.print(".");
+	Serial1.println(telemetry->milliseconds);
+
+    Serial1.print(INDICATOR_ACCELX);
+    Serial1.println(telemetry->accelX);
+    Serial1.print(INDICATOR_ACCELY);
+    Serial1.println(telemetry->accelY);
+    Serial1.print(INDICATOR_ACCELZ);
+    Serial1.println(telemetry->accelZ);
+}
+
 
 void setup() 
 {
-	Serial.begin(9600);
+	if (DEBUG)
+	{
+		Serial.begin(9600);
+	}
+
+	/* Initialize connection to display */
+	Serial1.begin(9600);
 
 	if (!rf69.init())
 	{
@@ -71,7 +113,7 @@ void setup()
 	}
 
 	/* Set dBm up to 20 */
-	rf69.setTxPower(14);
+	rf69.setTxPower(20);
 
 	/* The encryption key has to be the same on all nodes */
 	uint8_t key[] = ENCRYPTION_KEY;
@@ -99,15 +141,26 @@ void loop()
 		    delay(10);
 		    digitalWrite(15,LOW);	
 
-			Serial.print("got request: 0x");
-			Serial.println(buf[0], HEX);
+			if (DEBUG)
+			{
+				Serial.print("got request: 0x");
+				Serial.println(buf[0], HEX);
+			}
 
 			if (buf[0] == DATA_TYPE_TELEMETRY)
 			{
 				/* It's telemetry, so cast it to that and ship to the display/logger */
 				telemetry = (DataTelemetry *)buf;
 				
-				if (DEBUG) debug();				
+				sendToDisplay();
+				//if (DEBUG) debug();				
+			}
+			else if (buf[0] == DATA_TYPE_LAUNCHER)
+			{
+				DataLauncher* launcher = (DataLauncher *)buf;
+				
+				Serial.print(INDICATOR_LAUNCHARM);
+				Serial.println(launcher->armState);
 			}
 		}
 		else

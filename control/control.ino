@@ -8,20 +8,25 @@ Then include those .h files in your sketch and use the array name
 #include "SPI.h"
 #include "ILI9341_due_config.h"
 #include "ILI9341_due.h"
-#include "alert.h"
-#include "info.h"
-#include "close.h"
 #include "launchcontrol2.h"
 #include "numbers.h"
+//#include "SD.h"
+#include "SdFat.h"
+#include "SdFatUtil.h"
+#include "rocket.h"
 
-// #define LCD_CS 10	// Chip Select for LCD
-// #define LCD_DC 9	// Command/Data for LCD
-// #define LCD_RST 8	// Reset for LCD
 
+/* PIN DEFINITIONS */
+#define SD_CS 4		// Chip Select for LCD
 #define LCD_CS 5	// Chip Select for LCD
 #define LCD_DC 6	// Command/Data for LCD
 #define LCD_RST 13	// Reset for LCD
 
+#define SWITCH_SOURCE 26
+#define SWITCH_LAUNCH 24
+#define SWITCH_RECORD 22
+
+/* DISPLAY CONSTANTS */
 #define NUMBER_WIDTH 13
 #define NUMBER_HEIGHT 17
 
@@ -32,25 +37,89 @@ Then include those .h files in your sketch and use the array name
 #define ALTITUDE_Y 100
 #define DIGIT0_X 283
 
-// armed button
-// 2x143 - 119x237
-//
-//
-// launch 298x148 - 311 x 161
-//
-// vehicle 180
-//
-// record 212
-
-
 ILI9341_due tft(LCD_CS, LCD_DC, LCD_RST);
 
+/* Represents possible values for launch control arming */
+enum armState {
+	
+	ARM_SAFE,
+	ARM_ARMED,
+	ARM_FIRING
+};
+
+/* Represents possible values for generic ready state displays */
+enum readyState {
+	
+	READY_READY,
+	READY_WAITING,
+	READY_ERROR
+};
+
+
+/* Static state management */
 float maxaltitude;
 float altitude;
 float acceleration;
 float latitude;
 float longitude;
 
+bool recordSwitchLastState;
+bool launchSwitchLastState;
+bool recording;
+bool launching;
+
+SdFat sd;
+SdFile dataFile;
+
+uint32_t lastTime;
+uint32_t lastLaunchTime;
+uint32_t lastVehicleTime;
+uint32_t launchStartTime;
+uint8_t launchSafetyState;
+
+
+/* Opens a file for recording data with a consecutive file name */
+void startLogFile()
+{
+	char filename[7] = "00.txt";
+	
+    while (sd.exists(filename)) 
+	{
+		if (filename[1] != '9') 
+		{
+        	filename[1]++;
+      	} 
+		else if (filename[0] != '9') 
+		{
+        	filename[1] = '0';        
+			filename[0]++;
+      	} 
+		else 
+		{
+			recording = false;
+			setVehicleRecord(READY_ERROR);
+			filename[0] = '\0';
+      	}
+    }
+
+	if (filename[0] != '\0')
+	{
+		if (dataFile.open(filename, O_CREAT | O_WRITE | O_EXCL))
+		{
+			recording = true;
+			setVehicleRecord(READY_READY);
+		}
+		else
+		{
+			recording = false;
+			setVehicleRecord(READY_ERROR);
+		}
+	}
+}
+
+
+
+/* Finds a digit value at a position in a floating point number */
 uint8_t findDigit(int8_t digit, float value)
 {
 	/* Shift the number to the point where 1's digit is what we want */
@@ -73,6 +142,7 @@ uint8_t findDigit(int8_t digit, float value)
 	return (int)value % 10;
 }
 
+/* Renders a digit on screen */
 void displayDigit(uint8_t row, uint8_t column, uint8_t value)
 {
 	int y = MAX_ALTITUDE_Y + (row * 24);
@@ -81,6 +151,7 @@ void displayDigit(uint8_t row, uint8_t column, uint8_t value)
 	tft.drawImage(NUMBERS[value], x, y, 13, 17);
 }
 
+/* Updates the max altitude display */
 void setMaxAltitude(float alt)
 {
 	for (int i = 0; i < 6; i++)
@@ -89,6 +160,7 @@ void setMaxAltitude(float alt)
 	}
 }
 
+/* Updates the max acceleration value */
 void setMaxAcceleration(float g)
 {
 	for (int i = -2; i < 0; i++)
@@ -102,6 +174,7 @@ void setMaxAcceleration(float g)
 	}
 }
 
+/* Updates the latitude display */
 void setLatitude(float lat)
 {
 	for (int i = -6; i < 0; i++)
@@ -115,6 +188,7 @@ void setLatitude(float lat)
 	}	
 }
 
+/* Updates the longitude display */
 void setLongitude(float lon)
 {
 	for (int i = -6; i < 0; i++)
@@ -128,6 +202,7 @@ void setLongitude(float lon)
 	}
 }
 
+/* Updates the current altitude display */
 void setAltitude(float alt)
 {
 	for (int i = 0; i < 6; i++)
@@ -136,13 +211,7 @@ void setAltitude(float alt)
 	}
 }
 
-enum armState {
-	
-	ARM_SAFE,
-	ARM_READY,
-	ARM_ARMED
-};
-
+/* Updates the arm state display */
 void setArmState(int state)
 {
 	switch(state)
@@ -152,27 +221,22 @@ void setArmState(int state)
 			tft.fillRect(2, 143, 119, 237, ILI9341_GREEN);
 			break;
 
-		case ARM_READY:			
+		case ARM_ARMED:			
 	
 			tft.fillRect(2, 143, 119, 237, ILI9341_YELLOW);
 			break;
 
-		case ARM_ARMED:			
+		case ARM_FIRING:			
 	
 			tft.fillRect(2, 143, 119, 237, ILI9341_RED);
 			break;
 	}
 }
 
-enum readyState {
-	
-	READY_READY,
-	READY_WAITING,
-	READY_ERROR
-};
-
+/* Updates the display state of the launch connector */
 void setLaunchConnect(int state)
 {
+	//TODO: Timeout after 1 second
 	switch(state)
 	{
 		case READY_READY:			
@@ -236,52 +300,214 @@ void setVehicleRecord(int state)
 
 void setup()
 {
-	altitude = 123.456f;
-	acceleration = 1.0;
-	latitude = 40.7127;
-	longitude = 74.0059;
+	/* Initialize Serial ports */
+	/* Serial0 = console output */
+	/* Serial1 = radio intput/output */
 	
 	Serial.begin(9600);
+	Serial1.begin(9600);	
+	
+	altitude = 0.0f;
+	acceleration = 1.0;
+	latitude = 0.0f;
+	longitude = 0.0f;
+
+	/* 26 = 0V, 24 = PULLUP, 22 = PULLUP */
+	pinMode(SWITCH_SOURCE, OUTPUT);
+	digitalWrite(SWITCH_SOURCE, LOW);
+	
+	pinMode(SWITCH_RECORD, INPUT_PULLUP);
+	pinMode(SWITCH_LAUNCH, INPUT_PULLUP);
+
+	/* switch states are active low */
+	recordSwitchLastState = HIGH;
+	launchSwitchLastState = HIGH;
+	
+	recording = false;
+	launching = false;
+
+	lastTime = millis();
+	lastLaunchTime = 0;
+	lastVehicleTime = 0;
+
+	/* TFT  has to be set up after SD */
 	tft.begin();
+
+	/* Start up the SD connection before TFT */
+	bool sdBegin = sd.begin(SD_CS, SPI_HALF_SPEED);
 	
 	/* Set to landscape */
 	tft.setRotation(iliRotation270);
-		
+
 	tft.fillScreen(ILI9341_BLACK);
 	tft.drawImage(LAUNCHCONTROL2_IMAGE, 0, 0, 320, 240);
 
 	setMaxAltitude(0.0f);
-	
+
 	setArmState(ARM_SAFE);
-	
 	setLaunchConnect(READY_WAITING);
-	setVehicleConnect(READY_ERROR);
-	setVehicleRecord(READY_READY);
+	setVehicleConnect(READY_WAITING);
+
+	if (!sdBegin)
+	{
+		setVehicleRecord(READY_ERROR);
+	}
+	else
+	{
+		setVehicleRecord(READY_WAITING);
+	}
 }
 
 void loop()
-{
-
-	if (millis() % 100 == 0)
+{	
+	lastTime = millis();
+	
+	/* Update switch states and do whatever we need to */
+	int newRecordState = digitalRead(SWITCH_RECORD);
+	int newLaunchState = digitalRead(SWITCH_LAUNCH);
+	
+	/* Start/Stop recording */
+	if (recordSwitchLastState != newRecordState)
 	{
-		setMaxAltitude(altitude);	
-		setAltitude(altitude);	
+		if (newRecordState == LOW)
+		{
+			/* If low, start recording */
+			startLogFile();
+		}
+		else
+		{
+			/* If high, stop recording */
+			dataFile.close();
+			recording = false;
+			setVehicleRecord(READY_WAITING);
+		}
+		
+		recordSwitchLastState = newRecordState;
+	}
+	
+	/* If we are armed and the launch switch goes from high to low, then send fire signal */
+	if ((launchSafetyState == ARM_ARMED) && (launchSwitchLastState == HIGH) && (newLaunchState == LOW))
+	{
+		Serial1.println(INDICATOR_IGNITE);
+		
+		launchSwitchLastState = newLaunchState;
+	}
+
+
+	/* Pull data from radio module */
+	while (Serial1.available() > 0)
+	{
+		char cmd;
+		char* data;
+		char buffer[64];
+		uint8_t i = 0;
+		
+		do
+		{
+			buffer[i] = (char)Serial1.read();
+			i++;
+		} 
+		while ((buffer[i - 1] != '\n') && (Serial1.available()));  
+
+		buffer[i - 1] = '\0';
+		cmd = buffer[0];
+		data = &buffer[1];
+
+		switch(cmd)
+		{
+			case INDICATOR_ALTITUDE:
+
+				setVehicleConnect(READY_READY);
+				lastVehicleTime = lastTime;
+				altitude = atof(data);
+				
+				if (altitude < 0.0f)
+				{
+					altitude = 1.0f;
+				}
+				
+				if (altitude > maxaltitude) 
+				{
+					maxaltitude = altitude;
+				}
+				
+				break;
+
+			case INDICATOR_LATITUDE:
+
+				latitude = atof(data);
+				break;
+
+			case INDICATOR_LONGITUDE:
+
+				longitude = -1.0f * atof(data);
+				break;
+				
+			case INDICATOR_LAUNCHARM:
+			
+				lastLaunchTime = lastTime;
+				
+				/* Note: We HAVE to receive the state when the launch switch is low */
+				/* before we'll say that we are armed! This should help prevent accidents */
+				if ((data[0] == '1') && (digitalRead(SWITCH_LAUNCH) == LOW))
+				{
+					setArmState(ARM_ARMED);
+					launchSafetyState = ARM_ARMED;
+				}
+				
+				/* Ignition attempting */
+				if (data[0] == '2')
+				{
+					setArmState(ARM_FIRING);
+					launchSafetyState = ARM_FIRING;
+				}
+				
+				/* Starting sequence over */
+				if (data[0] == '0')
+				{
+					setArmState(ARM_SAFE);
+					launchSafetyState = ARM_SAFE;
+				}
+				
+				break;
+		}
+		
+		if (recording)
+		{
+			dataFile.print(lastTime);
+			dataFile.print('\t');
+			dataFile.print(cmd);
+			dataFile.print('\t');
+			dataFile.println(data);
+		}
+	}
+
+	/* Update the display every 100ms */
+	if (millis() % 100 == 0)
+	{		
+		setMaxAltitude(maxaltitude);
+		setAltitude(altitude);
 		setMaxAcceleration(acceleration);
 		setLatitude(latitude);
 		setLongitude(longitude);
-
-
-		altitude += 12.4;
-		if (altitude > 10000) altitude = 0.0f;
-		
-		acceleration += 0.01;
-		if (acceleration > 29) acceleration = 0.0f;
-		
-		longitude += 0.0000115;
-		if (longitude > 90) longitude = 0.0f;
-		
-		latitude += 0.000011;
-		if (latitude > 90) latitude = 0.0f;
-		
 	}
+	
+	/* If either of the devices haven't pinged in 1s, flag as disconnected */
+	if (lastTime > (lastVehicleTime + 5000))
+	{
+		setVehicleConnect(READY_ERROR);
+	}
+	else if (lastTime > (lastVehicleTime + 1000))
+	{
+		setVehicleConnect(READY_WAITING);
+	}
+	
+	if (lastLaunchTime > (lastLaunchTime + 5000))
+	{
+		setLaunchConnect(READY_ERROR);
+	}
+	else if (lastLaunchTime > (lastLaunchTime + 1000))
+	{
+		setLaunchConnect(READY_WAITING);
+	}	
 }

@@ -69,7 +69,6 @@ void debug()
 
 void setup() 
 {
-	/* TODO: Kill this when we're not debugging */
 	Serial.begin(9600);
 
 	/* Setup I2C */
@@ -90,7 +89,7 @@ void setup()
 	}
 
 	/* Set dBm up to 20 */
-	rf69.setTxPower(14);
+	rf69.setTxPower(20);
 
 	/* The encryption key has to be the same on all nodes */
 	uint8_t key[] = ENCRYPTION_KEY;
@@ -203,6 +202,8 @@ void loop()
 	    digitalWrite(15,LOW);
 	
 		if (DEBUG) debug();
-	}	
+	}
+	
+	//TODO: See if anyone sent a character and dump the flash if so
 }
 

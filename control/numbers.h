@@ -1,6 +1,7 @@
 /*
 
-	nw2s::r - an open source rocket launch control and telemetry system
+	nw2s::r - an open source model rocket launcher and telemetry system
+
 	Copyright (C) 2015 Scott Wilson (thomas.scott.wilson@gmail.com)
 
 	This program is free software: you can redistribute it and/or modify
