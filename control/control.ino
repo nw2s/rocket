@@ -392,6 +392,12 @@ void loop()
 		
 		launchSwitchLastState = newLaunchState;
 	}
+	
+	/* If the launchState ever turns off, make sure we recognize that */
+	if (newLaunchState == HIGH)
+	{
+		launchSwitchLastState = newLaunchState;
+	}
 
 
 	/* Pull data from radio module */
@@ -412,6 +418,10 @@ void loop()
 		buffer[i - 1] = '\0';
 		cmd = buffer[0];
 		data = &buffer[1];
+
+		Serial.print((int)cmd);
+		Serial.print(' ');
+		Serial.println((int)data[0]);
 
 		switch(cmd)
 		{
@@ -445,11 +455,13 @@ void loop()
 				
 			case INDICATOR_LAUNCHARM:
 			
+				setLaunchConnect(READY_READY);
+				
 				lastLaunchTime = lastTime;
 				
-				/* Note: We HAVE to receive the state when the launch switch is low */
+				/* Note: We HAVE to receive the state when the launch switch is off (active low!) */
 				/* before we'll say that we are armed! This should help prevent accidents */
-				if ((data[0] == '1') && (digitalRead(SWITCH_LAUNCH) == LOW))
+				if ((data[0] == '1') && (digitalRead(SWITCH_LAUNCH) == HIGH))
 				{
 					setArmState(ARM_ARMED);
 					launchSafetyState = ARM_ARMED;
@@ -483,7 +495,7 @@ void loop()
 	}
 
 	/* Update the display every 100ms */
-	if (millis() % 100 == 0)
+	if (lastTime % 100 == 0)
 	{		
 		setMaxAltitude(maxaltitude);
 		setAltitude(altitude);
@@ -502,11 +514,11 @@ void loop()
 		setVehicleConnect(READY_WAITING);
 	}
 	
-	if (lastLaunchTime > (lastLaunchTime + 5000))
+	if (lastTime > (lastLaunchTime + 5000))
 	{
 		setLaunchConnect(READY_ERROR);
 	}
-	else if (lastLaunchTime > (lastLaunchTime + 1000))
+	else if (lastTime > (lastLaunchTime + 1000))
 	{
 		setLaunchConnect(READY_WAITING);
 	}	

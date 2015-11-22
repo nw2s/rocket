@@ -5,6 +5,10 @@
 
 #define DATA_TYPE_TELEMETRY 0xA1
 #define DATA_TYPE_LAUNCHER 0xA2
+#define DATA_TYPE_IGNITION 0xA3
+
+#define RH_RF69_MAX_MESSAGE_LEN 64
+
 
 /* 38 bytes? */
 typedef struct dataTelemetry {
@@ -37,6 +41,13 @@ typedef struct dataLauncher {
 	uint8_t armState;
 
 } DataLauncher;
+
+typedef struct dataIgnition {
+	
+	uint8_t dataType;
+	uint8_t ignitionState;
+
+} DataIgnition;
 
 #define INDICATOR_TEMPERATURE 	't'
 #define INDICATOR_ALTITUDE 		'a'

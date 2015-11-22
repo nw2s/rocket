@@ -91,10 +91,7 @@ void sendToDisplay()
 
 void setup() 
 {
-	if (DEBUG)
-	{
-		Serial.begin(9600);
-	}
+	Serial.begin(9600);
 
 	/* Initialize connection to display */
 	Serial1.begin(9600);
@@ -158,9 +155,12 @@ void loop()
 			else if (buf[0] == DATA_TYPE_LAUNCHER)
 			{
 				DataLauncher* launcher = (DataLauncher *)buf;
-				
-				Serial.print(INDICATOR_LAUNCHARM);
-				Serial.println(launcher->armState);
+
+				for (int i = 0; i < 8; i++)
+				{
+					Serial1.print(INDICATOR_LAUNCHARM);
+					Serial1.println(launcher->armState);
+				}
 			}
 		}
 		else
@@ -168,5 +168,20 @@ void loop()
 			Serial.println("recv failed");
 		}
     }
+	
+	while (Serial1.available())
+	{
+		char data = Serial1.read();
+		
+		if (data == INDICATOR_IGNITE)
+		{
+			DataIgnition data;
+			data.dataType = DATA_TYPE_IGNITION;
+			data.ignitionState = 1;
+			
+			/* Cast the data to an array of bytes and send it */
+			rf69.send((uint8_t *)&data, sizeof(data));			
+		}
+	}
 }
 
